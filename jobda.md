@@ -10,3 +10,5 @@
 [마크다운 실험실](mdtest.html)
 
 [로드맵](roadmap.html)
+
+[디버깅 일지](debug.html)
