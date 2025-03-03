@@ -12,3 +12,5 @@
 [로드맵](roadmap.html)
 
 [디버깅 일지](debug.html)
+
+[소소한 팁](tip.html)
