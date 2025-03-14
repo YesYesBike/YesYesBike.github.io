@@ -135,5 +135,84 @@ rax 레지스터에 시스템 콜 리턴값이 들어가는 걸 순간 깜빡한
 버그의 원인을 단정짓기 전에 이 두 곳에서 충분한 정보를 얻자.
 레지스터는 화이트보드에 적으면서 변경사항을 기록할 수 있다.
 하지만 메모리는 어떠한가? 좀 더 생각해볼 만한 문제이다.</p>
+
+<p><br></p>
+
+<h3>006</h3>
+
+<p>어셈블리 확장자는 .s가 아니라 .S를 쓰는 게 좋다. 왜 그런지 차근차근 알아보자.</p>
+
+<p><pre><code>$ ls
+header.h  test.s  test.S
+$ cat header.h
+#define VALUE   10
+$ cat test.s
+#include "header.h"
+        mov x0, #VALUE
+$ diff test.s test.S; echo $?
+0
+</code></pre>
+header.h에는 VALUE 값이 들어있다. 그리고 test.s와 test.S 파일은 이 값을 사용한다.
+두 파일의 내용은 같다. 그럼 이제 각각 컴파일해보자.</p>
+
+<p><pre><code>$ aarch64-linux-gnu-gcc -I. -c test.S; echo $?
+0
+$ aarch64-linux-gnu-gcc -I. -c test.s; echo $?
+test.s: Assembler messages:
+test.s:2: Error: undefined symbol VALUE used as an immediate value
+1
+$
+</code></pre>
+붓다 쉿! 이 무슨 일인가! 고작 확장자 하나 바뀌었다고 오류를 내뿜다니 이 무슨 부조리!
+어찌 되었건 간에 덕분에 오랫동안 원인을 찾아내느라 고생했다.<br/>
+x86 어셈블리는 과연 어떨지 궁금하니 한 번 실험해 보겠다.</p>
+
+<p><pre><code>$ cat header.h
+#define VALUE   0x12345678
+$ cat test.s
+#include "header.h"
+        mov $VALUE, %eax
+$ diff test.s test.S; echo $?
+0
+</code></pre>
+아까처럼 값을 레지스터에 대입하는 코드이다.</p>
+
+<p><pre><code>$ gcc -I. -c test.s -o small.o; echo $?
+0
+$ gcc -I. -c test.S -o big.o; echo $?
+0
+</code></pre>
+이번에는 오류 메시지를 내뱉지 않았다. 하지만 내용물은 어떨까? 확인해보자.</p>
+
+<p><pre><code>$ objdump -d small.o | tail -n2
+0000000000000000 &lt;.text&gt;:
+   0:   b8 00 00 00 00          mov    $0x0,%eax
+$ objdump -d big.o | tail -n2
+0000000000000000 &lt;.text&gt;:
+   0:   b8 78 56 34 12          mov    $0x12345678,%eax
+</code></pre>
+나무아미타불! x86도 피해가지 못했다!
+내 추측에 따르면 어셈블러보다는 전처리기 쪽의 문제인 것 같다.
+사실 명확한 근거는 없다.
+어찌 되었건 간에 .s를 사용하면 예상치 못한 순간에 개고생 할 수 있다는 건 잘 알았다.</p>
+
+<p>번외: .asm 확장자를 쓰면 이런 일이 벌어진다. 오브젝트 파일은 생성되지 않는다.
+<pre><code>$ gcc -I. -c test.asm -o asasasa.o; echo $?
+gcc: warning: test.asm: linker input file unused because linking not done
+0
+</code></pre>
+번외2: gcc 대신에 as를 쓰면 둘 다 매크로가 적용되지 않는다.
+<pre><code>$ as -I. -c test.s -o small.o; echo $?
+0
+$ as -I. -c test.S -o big.o; echo $?
+0
+$ objdump -d small.o | tail -n2
+0000000000000000 &lt;.text&gt;:
+   0:   b8 00 00 00 00          mov    $0x0,%eax
+$ objdump -d big.o | tail -n2
+0000000000000000 &lt;.text&gt;:
+   0:   b8 00 00 00 00          mov    $0x0,%eax
+</code></pre>
+왜 그런지는 GCC 매뉴얼 안에 숨어있을지도 모른다. 하지만 읽을 엄두가 나지 않는다&hellip;</p>
 </body>
 </html>
