@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Image to BMP Converter</title>
+</head>
+<body>
+<h3>Upload an image (jpg/png/webp/gif):</h3>
+<input type="file" id="fileInput" accept="image/*">
+<button id="convertBtn">Convert to BMP</button>
+<br><br>
+<canvas id="previewCanvas"></canvas>
+<br>
+<a id="downloadLink" style="display:none;">Download BMP</a>
+
+<script>
+function brightness(r, g, b) {
+    return Math.floor((r + g + b) / 3);
+}
+
+function mapColor(val) {
+    if (val <= 52) return [0, 0, 0]; // black
+    if (val <= 102) return [0, 0, 255]; // blue
+    if (val <= 152) return [0, 255,   0];  // green
+    if (val <= 202) return [255, 0, 0];  // red
+    return [255, 255, 255]; // white
+}
+
+function createBMP(width, height, pixels) {
+    let rowSize = (width * 3 + 3) & ~3;
+    let imageSize = rowSize * height;
+    let fileSize = 54 + imageSize;
+
+    let buffer = new ArrayBuffer(fileSize);
+    let dv = new DataView(buffer);
+
+    // BITMAPFILEHEADER
+    dv.setUint16(0, 0x4D42, true); // "BM"
+    dv.setUint32(2, fileSize, true);
+    dv.setUint32(10, 54, true);
+
+    // BITMAPINFOHEADER
+    dv.setUint32(14, 40, true);
+    dv.setInt32(18, width, true);
+    dv.setInt32(22, -height, true); // top-down
+    dv.setUint16(26, 1, true);
+    dv.setUint16(28, 24, true);
+    dv.setUint32(34, imageSize, true);
+
+    let offset = 54;
+    let pad = rowSize - width * 3;
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let i = (y * width + x) * 3;
+            let r = pixels[i];
+            let g = pixels[i + 1];
+            let b = pixels[i + 2];
+            dv.setUint8(offset++, b);
+            dv.setUint8(offset++, g);
+            dv.setUint8(offset++, r);
+        }
+        for (let p = 0; p < pad; p++) dv.setUint8(offset++, 0);
+    }
+
+    return new Blob([buffer], {type: "image/bmp"});
+}
+
+document.getElementById('convertBtn').onclick = () => {
+    let fileInput = document.getElementById('fileInput');
+    if (!fileInput.files.length) {
+        alert("Choose an image file first.");
+        return;
+    }
+
+    let file = fileInput.files[0];
+    let img = new Image();
+    img.onload = () => {
+        let canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        let ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        let data = ctx.getImageData(0, 0, img.width, img.height).data;
+
+        let pixels = new Uint8Array(img.width * img.height * 3);
+        let previewData = ctx.createImageData(img.width, img.height);
+
+        for (let i = 0, j = 0; i < data.length; i += 4, j += 3) {
+            let r = data[i], g = data[i + 1], b = data[i + 2];
+            let br = brightness(r, g, b);
+            let [rr, gg, bb] = mapColor(br);
+
+            // store for BMP
+            pixels[j] = rr;
+            pixels[j + 1] = gg;
+            pixels[j + 2] = bb;
+
+            // store for preview (RGBA)
+            previewData.data[i] = rr;
+            previewData.data[i + 1] = gg;
+            previewData.data[i + 2] = bb;
+            previewData.data[i + 3] = 255;
+        }
+
+        // Show preview on screen
+        let previewCanvas = document.getElementById('previewCanvas');
+        previewCanvas.width = img.width;
+        previewCanvas.height = img.height;
+        let previewCtx = previewCanvas.getContext('2d');
+        previewCtx.putImageData(previewData, 0, 0);
+
+        // Create BMP for download
+        let bmp = createBMP(img.width, img.height, pixels);
+        let link = document.getElementById('downloadLink');
+        link.href = URL.createObjectURL(bmp);
+        link.download = "output.bmp";
+        link.style.display = "inline";
+        link.textContent = "Download BMP";
+    };
+    img.src = URL.createObjectURL(file);
+};
+</script>
+</body>
+</html>
